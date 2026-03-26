@@ -1,6 +1,7 @@
 import fs from "fs"
 import path from "path"
 import { Bot, InlineKeyboard } from "grammy"
+import { loadConfig, saveConfig } from "../config.js"
 import type { Config } from "../config.js"
 import type { SessionManager } from "../session-manager.js"
 import { ClaudeCodeAgent } from "../agents/claude-code.js"
@@ -8,6 +9,7 @@ import { CodexAgent } from "../agents/codex.js"
 import type { Agent, AgentRun } from "../agents/base.js"
 import { isTelegramAllowed } from "../utils/auth.js"
 import { stripAnsi, chunkText } from "../utils/output-cleaner.js"
+ 
 
 // Telegram typing indicators expire after 5 s; refresh slightly before that
 const TYPING_REFRESH_MS = 4500
@@ -25,8 +27,10 @@ Commands:
 /new — start a fresh conversation (clears history)
 /project — list or switch projects
 /status — show current session info
+/reload — reload config from disk
 /ping — check the bot is alive
 /help — show this message
+/addproject - add a new project (name + path)
 `.trim()
 
 const UNAUTHORIZED = "⛔ Unauthorized."
@@ -233,6 +237,49 @@ export function createTelegramBot(config: Config, sessions: SessionManager): Bot
     sessions.reset("telegram", ctx.chat.id)
     await ctx.reply("Fresh conversation started. Claude has no memory of previous messages.")
   })
+
+  bot.command("reload", async (ctx) => {
+    if (!isAllowed(ctx.from?.id, ctx.from?.username)) { await ctx.reply(UNAUTHORIZED); return }
+    try {
+      const fresh = loadConfig()
+      Object.assign(config, fresh)
+      await ctx.reply("Config reloaded.")
+    } catch (err) {
+      await ctx.reply(`Failed to reload config: ${(err as Error).message}`)
+    }
+  })
+
+  bot.command("addproject", async (ctx) => {
+    if (!isAllowed(ctx.from?.id, ctx.from?.username)) { await ctx.reply(UNAUTHORIZED); return }
+
+    const parts = (ctx.message?.text ?? "").split(" ").slice(1)
+    const name = parts[0]
+    const rawPath = parts.slice(1).join(" ")
+
+    if (!name || !rawPath) {
+      await ctx.reply("Usage: `/addproject <name> <path>`", { parse_mode: "Markdown" })
+      return
+    }
+
+    const resolved = path.resolve(rawPath)
+
+    if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
+      await ctx.reply(`Path not found or not a directory: \`${resolved}\``, { parse_mode: "Markdown" })
+      return
+    }
+
+    if (!config.projects) config.projects = {}
+
+    if (config.projects[name]) {
+      await ctx.reply(`Project \`${name}\` already exists → ${config.projects[name]}`, { parse_mode: "Markdown" })
+      return
+    }
+
+    config.projects[name] = resolved
+    saveConfig(config)
+    await ctx.reply(`Added project \`${name}\` → ${resolved}`, { parse_mode: "Markdown" })
+  })
+
 
   bot.command("project", async (ctx) => {
     if (!isAllowed(ctx.from?.id, ctx.from?.username)) { await ctx.reply(UNAUTHORIZED); return }
