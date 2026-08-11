@@ -1,3 +1,5 @@
+
+
 # phoneClall
 
 Prompt Claude Code or Codex from your phone. Send a message on Telegram, get the agent's response back — live, as it streams.
@@ -56,6 +58,8 @@ npx phoneclall status
 | `/new` | Clear conversation history, start fresh |
 | `/project` | List configured projects |
 | `/project <name>` | Switch to a different project folder |
+| `/addproject <name> <path>` | Add a new project from the bot |
+| `/reload` | Reload config from disk |
 | `/status` | Show current agent, project, and session info |
 | `/ping` | Check the bot is alive |
 | `/help` | Show command list |
